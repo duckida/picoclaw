@@ -1,5 +1,7 @@
 package httpapi
 
+import "strings"
+
 func extractPartThoughtSignature(thoughtSignature string, thoughtSignatureSnake string) string {
 	if thoughtSignature != "" {
 		return thoughtSignature
@@ -68,4 +70,13 @@ func sanitizeSchemaForGemini(schema map[string]any) map[string]any {
 	}
 
 	return result
+}
+
+func extractProtocol(model string) (protocol, modelID string) {
+	model = strings.TrimSpace(model)
+	protocol, modelID, found := strings.Cut(model, "/")
+	if !found {
+		return "openai", model
+	}
+	return protocol, modelID
 }

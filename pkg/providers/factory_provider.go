@@ -15,7 +15,6 @@ import (
 	anthropicmessages "github.com/sipeed/picoclaw/pkg/providers/anthropic_messages"
 	"github.com/sipeed/picoclaw/pkg/providers/azure"
 	"github.com/sipeed/picoclaw/pkg/providers/bedrock"
-	"github.com/sipeed/picoclaw/pkg/providers/common"
 )
 
 type protocolMeta struct {
@@ -103,7 +102,27 @@ func createCodexAuthProvider() (LLMProvider, error) {
 //   - Provider "openai", Model "openai/gpt-4o" -> ("openai", "openai/gpt-4o")
 //   - Model "gpt-4o" -> ("openai", "gpt-4o")
 func ExtractProtocol(cfg *config.ModelConfig) (protocol, modelID string) {
-	return common.ExtractProtocol(model)
+	if cfg == nil {
+		return "", ""
+	}
+
+	model := strings.TrimSpace(cfg.Model)
+	if provider := strings.TrimSpace(cfg.Provider); provider != "" {
+		return NormalizeProvider(provider), model
+	}
+	if model == "" {
+		return "", ""
+	}
+
+	protocol, rest, found := strings.Cut(model, "/")
+	if !found {
+		return "openai", model
+	}
+	protocol = strings.TrimSpace(protocol)
+	if protocol == "" {
+		return "", strings.TrimSpace(rest)
+	}
+	return NormalizeProvider(protocol), strings.TrimSpace(rest)
 }
 
 // ResolveAPIBase returns the configured API base, or the protocol default when

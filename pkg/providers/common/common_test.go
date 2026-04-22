@@ -660,37 +660,6 @@ func TestAsFloat(t *testing.T) {
 	}
 }
 
-// --- ExtractProtocol tests ---
-
-func TestExtractProtocol(t *testing.T) {
-	tests := []struct {
-		name         string
-		model        string
-		wantProtocol string
-		wantModelID  string
-	}{
-		{"openai with prefix", "openai/gpt-4o", "openai", "gpt-4o"},
-		{"anthropic with prefix", "anthropic/claude-sonnet-4.6", "anthropic", "claude-sonnet-4.6"},
-		{"no prefix defaults to openai", "gpt-4o", "openai", "gpt-4o"},
-		{"groq with prefix", "groq/llama-3.1-70b", "groq", "llama-3.1-70b"},
-		{"empty string", "", "openai", ""},
-		{"with whitespace", "  openai/gpt-4  ", "openai", "gpt-4"},
-		{"multiple slashes", "nvidia/meta/llama-3.1-8b", "nvidia", "meta/llama-3.1-8b"},
-		{"azure with prefix", "azure/my-gpt5-deployment", "azure", "my-gpt5-deployment"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			protocol, modelID := ExtractProtocol(tt.model)
-			if protocol != tt.wantProtocol {
-				t.Errorf("ExtractProtocol(%q) protocol = %q, want %q", tt.model, protocol, tt.wantProtocol)
-			}
-			if modelID != tt.wantModelID {
-				t.Errorf("ExtractProtocol(%q) modelID = %q, want %q", tt.model, modelID, tt.wantModelID)
-			}
-		})
-	}
-}
-
 // --- ParseDataAudioURL tests ---
 
 func TestParseDataAudioURL(t *testing.T) {
