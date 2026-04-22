@@ -1,0 +1,138 @@
+name: Build & Release arm64 with WhatsApp support
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install libolm (required for Matrix crypto)
+        run: |
+          sudo apt update
+          sudo apt install -y libolm-dev build-essential
+
+      - name: Fix embed directive (create workspace dir)
+        run: |
+          mkdir -p cmd/picoclaw/internal/onboard/workspace
+          touch cmd/picoclaw/internal/onboard/workspace/README
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build for Pi Zero 2 (Linux/arm64)
+        run: |
+          CGO_ENABLED=1 go build \
+            -tags "whatsapp_native stdjson" \
+            -trimpath \
+            -ldflags="-s -w -X github.com/sipeed/picoclaw/pkg/config.Version=${{ steps.version.outputs.version }}" \
+            -o picoclaw \
+            ./cmd/picoclaw
+
+      - name: Verify binary
+        run: |
+          file picoclaw
+          ls -lh picoclaw
+          ./picoclaw version || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: picoclaw-linux-arm64
+          path: picoclaw
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [ build-arm64 ]
+    runs-on: ubuntu-latest
+    if: >
+      needs.build-arm64.result == 'success' && (
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.ref == 'refs/heads/main' ||
+        github.event_name == 'workflow_dispatch'
+      )
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.version }}" || true
+          git push origin "${{ steps.version.outputs.version }}" || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ steps.version.outputs.version }}"
+          name: "PicoClaw ${{ steps.version.outputs.version }}"
+          body: |
+            ## PicoClaw ${{ steps.version.outputs.version }}
+
+            🤖 Ultra-lightweight personal AI assistant
+
+            ### 📦 Binary Info
+            - **Platform**: Linux ARM64 (Pi Zero 2, Raspberry Pi 4/5, etc.)
+            - **Channels**: WhatsApp (native), Matrix, Telegram, + more
+            - **Build**: Native ARM64, stripped, CGO-enabled for Matrix crypto
+
+            ### 🚀 Quick Start
+            ```bash
+            chmod +x picoclaw
+            ./picoclaw gateway
+            ```
+            Then scan the QR code with WhatsApp to link.
+
+            ### ⚙️ Configuration
+            See [config.yaml](https://github.com/sipeed/picoclaw/blob/main/config/config.yaml.example) for options.
+          files: |
+            dist/picoclaw-linux-arm64/picoclaw
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
